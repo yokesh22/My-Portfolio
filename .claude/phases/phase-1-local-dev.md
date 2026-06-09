@@ -13,17 +13,17 @@
 - [x] Navbar with terminal-style links
 
 ### 1B. Terminal intro animation
-- [ ] Create `use-typing-effect.ts` hook
+- [x] Create `use-typing-effect.ts` hook
   - Accepts array of lines with per-line delay
   - Returns current visible text + cursor position
   - Supports pause between lines
-- [ ] Build `terminal-intro.tsx` component
+- [x] Build `terminal-intro.tsx` component
   - Terminal window chrome (dots, title bar)
   - Typing sequence: whoami → skills → status
   - Blinking cursor (CSS animation)
   - After typing completes: fade-in CTA button "explore ~/portfolio"
   - Use Framer Motion for line reveals
-- [ ] Test: smooth typing, no layout shifts, works on mobile
+- [ ] Test: smooth typing, no layout shifts, works on mobile (visual verify pending)
 
 ### 1C. Three.js particle background
 - [ ] Build `particle-bg.tsx` with React Three Fiber
