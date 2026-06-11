@@ -10,11 +10,12 @@ const ParticleBg = dynamic(() => import("./particle-bg"), { ssr: false });
 
 export function HeroSection() {
   return (
-    <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden px-6 pt-16">
+    <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden pt-16">
       <ParticleBg />
 
-      {/* Radial fade so particles recede toward the edges */}
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,transparent_0%,var(--color-terminal-bg)_75%)]" />
+      {/* Gentle radial fade — keep the field visible across the hero, only
+          softening it at the very edges. */}
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_55%,var(--color-terminal-bg)_100%)]" />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.97 }}

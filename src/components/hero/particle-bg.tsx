@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -9,23 +9,37 @@ const BOUNDS = 6; // half-extent of the cube particles live in
 const LINK_DISTANCE = 1.5; // proximity threshold for drawing a connection
 const MOUSE_RADIUS = 2.2;
 const MOUSE_STRENGTH = 0.015;
+const FPS_CAP = 30;
+const STEP = 1 / FPS_CAP; // min seconds between simulation updates
 
 interface Particle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
 }
 
+interface Sim {
+  particles: Particle[];
+  linePositions: Float32Array;
+  dummy: THREE.Object3D;
+  mouseWorld: THREE.Vector3;
+}
+
 function ParticleField() {
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const linesRef = useRef<THREE.LineSegments>(null);
+  const lineGeoRef = useRef<THREE.BufferGeometry>(null);
   const { viewport, pointer } = useThree();
 
-  // Reusable scratch objects (avoid per-frame allocation).
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const mouseWorld = useMemo(() => new THREE.Vector3(), []);
+  // All mutable simulation state lives in refs. useFrame mutates it every
+  // frame — expected for R3F, but the React Compiler treats useMemo results
+  // as frozen render values, so they can't be mutated. Refs are the
+  // sanctioned mutable escape hatch.
+  const simRef = useRef<Sim | null>(null);
+  const accRef = useRef(0); // delta accumulator for the fps cap
 
-  const particles = useMemo<Particle[]>(() => {
-    return Array.from({ length: COUNT }, () => ({
+  // Build particle data once, after mount. Keeps Math.random off the render
+  // path (react-hooks/purity) and binds the line buffer to the geometry.
+  useEffect(() => {
+    const particles: Particle[] = Array.from({ length: COUNT }, () => ({
       position: new THREE.Vector3(
         (Math.random() - 0.5) * BOUNDS * 2,
         (Math.random() - 0.5) * BOUNDS * 2,
@@ -37,26 +51,37 @@ function ParticleField() {
         (Math.random() - 0.5) * 0.01,
       ),
     }));
+
+    // Preallocate a line buffer sized for the worst case we'll actually draw.
+    const linePositions = new Float32Array(COUNT * 6 * 2 * 3);
+    const geo = lineGeoRef.current;
+    if (geo) {
+      geo.setAttribute(
+        "position",
+        new THREE.BufferAttribute(linePositions, 3),
+      );
+    }
+
+    simRef.current = {
+      particles,
+      linePositions,
+      dummy: new THREE.Object3D(),
+      mouseWorld: new THREE.Vector3(),
+    };
   }, []);
 
-  // Preallocate a line buffer sized for the worst case we'll actually draw.
-  const maxSegments = COUNT * 6;
-  const linePositions = useMemo(
-    () => new Float32Array(maxSegments * 2 * 3),
-    [maxSegments],
-  );
-  const lineGeometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute(
-      "position",
-      new THREE.BufferAttribute(linePositions, 3),
-    );
-    return geo;
-  }, [linePositions]);
-
-  useFrame(() => {
+  useFrame((_, delta) => {
+    const sim = simRef.current;
     const mesh = meshRef.current;
-    if (!mesh) return;
+    const geo = lineGeoRef.current;
+    if (!sim || !mesh || !geo) return;
+
+    // Cap the simulation at 30fps regardless of display refresh rate.
+    accRef.current += delta;
+    if (accRef.current < STEP) return;
+    accRef.current = 0;
+
+    const { particles, linePositions, dummy, mouseWorld } = sim;
 
     // Map the pointer (NDC) onto the particle plane in world units.
     mouseWorld.set(
@@ -72,10 +97,7 @@ function ParticleField() {
 
       if (p.position.x > BOUNDS || p.position.x < -BOUNDS) p.velocity.x *= -1;
       if (p.position.y > BOUNDS || p.position.y < -BOUNDS) p.velocity.y *= -1;
-      if (
-        p.position.z > BOUNDS / 2 ||
-        p.position.z < -BOUNDS / 2
-      ) {
+      if (p.position.z > BOUNDS / 2 || p.position.z < -BOUNDS / 2) {
         p.velocity.z *= -1;
       }
 
@@ -113,18 +135,19 @@ function ParticleField() {
         }
       }
     }
-    lineGeometry.setDrawRange(0, ptr / 3);
-    lineGeometry.attributes.position.needsUpdate = true;
+    geo.setDrawRange(0, ptr / 3);
+    geo.attributes.position.needsUpdate = true;
   });
 
   return (
     <group>
       <instancedMesh ref={meshRef} args={[undefined, undefined, COUNT]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshBasicMaterial color="#4ade80" transparent opacity={0.5} />
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshBasicMaterial color="#4ade80" transparent opacity={0.85} />
       </instancedMesh>
-      <lineSegments ref={linesRef} geometry={lineGeometry}>
-        <lineBasicMaterial color="#1e293b" transparent opacity={0.6} />
+      <lineSegments>
+        <bufferGeometry ref={lineGeoRef} />
+        <lineBasicMaterial color="#22d3ee" transparent opacity={0.28} />
       </lineSegments>
     </group>
   );

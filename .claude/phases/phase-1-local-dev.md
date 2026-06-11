@@ -19,35 +19,56 @@
   - Supports pause between lines
 - [x] Build `terminal-intro.tsx` component
   - Terminal window chrome (dots, title bar)
-  - Typing sequence: whoami → skills → status
+  - Ubuntu-style tabs: whoami / about.md / stats — each tab has its own content
+    and remounts (keyed on active tab) to re-run its typing animation on switch
+  - Typing sequence per tab (whoami → skills → status on tab 1)
   - Blinking cursor (CSS animation)
+  - After tab 1 typing completes: pulsing green dot on about.md tab + hand-click
+    (Pointer) icon nudging 3×, plus "more here" label that fades after 3s
+  - All hints clear on first tab click; per-tab unread dots persist until visited
   - After typing completes: fade-in CTA button "explore ~/portfolio"
   - Use Framer Motion for line reveals
 - [ ] Test: smooth typing, no layout shifts, works on mobile (visual verify pending)
 
 ### 1C. Three.js particle background
-- [ ] Build `particle-bg.tsx` with React Three Fiber
-  - Canvas with transparent background, ssr: false via next/dynamic
-  - 100-150 particles (instanced mesh for performance)
+- [x] Build `particle-bg.tsx` with React Three Fiber
+  - Canvas with transparent background, ssr: false via next/dynamic (in hero-section)
+  - 120 particles (instanced mesh for performance)
   - Particles connected by lines when within threshold distance
   - Slow random drift animation
-  - Mouse interaction: gentle repulsion/attraction near cursor
+  - Mouse interaction: gentle repulsion near cursor
   - Color: terminal-green with low opacity
-  - Cap at 30fps, use `useFrame` for animation loop
-- [ ] Performance: test on throttled CPU, keep under 16ms frame time
+  - Cap at 30fps (delta accumulator), use `useFrame` for animation loop
+  - Mutable sim state in refs + Math.random in effect (React Compiler purity/immutability)
+- [ ] Performance: test on throttled CPU, keep under 16ms frame time (visual verify pending)
 
-### 1D. Skills + architecture section
-- [ ] Build `skills-section.tsx`
-  - Blueprint grid background (CSS from globals)
-  - Section heading "System architecture" in Space Grotesk
-  - Skill categories as blueprint-style bordered boxes
-    - Languages: Node.js, Python, TypeScript
-    - Infrastructure: Docker, AWS (EC2, SQS, ALB), GCP
-    - Databases: PostgreSQL, MySQL, DynamoDB, Supabase
-    - Tools: Git, GitHub Actions, Cloudflare Workers
-  - Hover: subtle blue glow
-  - Scroll-triggered fade-up animation (Framer Motion whileInView)
-- [ ] Wire hero-section.tsx combining terminal + particles + skills
+### 1D. Expertise + stack section (redesigned)
+- [x] Replaced old skills grid with combined expertise section
+- [x] 3 domain cards: Payments, Scale, Infrastructure — with metrics
+- [x] Layered stack diagram: frontend → backend → integrations → data → infra
+- [x] Blueprint grid background with edge glow lines
+- [x] Framer Motion scroll-triggered staggered animations
+- [x] Mobile responsive (cards stack, items wrap)
+- [ ] Visual verify: check section looks correct in browser
+
+### 1E. Experience game section
+- [x] Build experience-game.tsx with Canvas 2D game engine
+- [x] Three zones: I4U Labs (green), Vidhai (cyan), TinyMart (amber)
+- [x] 12 pipe landmarks with achievement data, collectible stars
+- [x] Solid pipe collision: player blocked horizontally, can land on top
+- [x] Pothole gaps between zones with bridge platforms
+- [x] Checkpoint system: respawn at last collected pipe
+- [x] Red flash respawn effect
+- [x] Zone transition cinematic text (fade in/out)
+- [x] Particle trail behind player when moving
+- [x] Progress bar + HUD (zone name, collected counter)
+- [x] Info panel showing achievement details near pipes
+- [x] End screen with stats and replay/contact buttons
+- [x] Mobile touch controls (button overlay for left/right/jump)
+- [x] Section heading with "Walk through my career" + instructions
+- [x] Added to page.tsx below expertise section
+- [x] Visual verify: play through entire game, test all mechanics
+- [ ] Test on mobile: touch controls work, game is playable at 360px height
 
 ---
 
