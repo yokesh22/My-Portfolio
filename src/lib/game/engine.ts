@@ -1,15 +1,27 @@
 import {
   CAMERA_FOLLOW_RATIO,
+  CAMERA_FOLLOW_RATIO_MOBILE,
+  FRAME_TIME_THRESHOLD_MS,
   GRAVITY,
   GROUND_OFFSET,
   JUMP_VELOCITY,
+  PARTICLE_LIFE_DESKTOP,
+  PARTICLE_LIFE_MOBILE,
+  PARTICLE_MAX_DESKTOP,
+  PARTICLE_MAX_MOBILE,
+  PARTICLES_PER_FRAME_DESKTOP,
+  PARTICLES_PER_FRAME_MOBILE,
   PIPE_BLOCK_MARGIN,
   PIPE_BODY,
+  PIPE_HEIGHT_SCALE_MOBILE,
   PIPE_LIP_HEIGHT,
   PIPE_WIDTH,
-  PLAYER_HEIGHT,
+  PIPE_WIDTH_MOBILE,
   PLAYER_SPEED,
+  PLAYER_SPEED_MOBILE,
   PLAYER_WIDTH,
+  STAR_COUNT_DESKTOP,
+  STAR_COUNT_MOBILE,
   WORLD_WIDTH,
 } from "./constants";
 import type { FrameEvents, GameState, Keys, WorldData } from "./types";
@@ -33,6 +45,7 @@ export function createInitialState(): GameState {
     frame: 0,
     lastZone: "",
     particles: [],
+    moving: false,
   };
 }
 
@@ -63,6 +76,8 @@ export function update(
   world: WorldData,
   keys: Keys,
   canvas: { width: number; height: number },
+  isMobile = false,
+  frameTime = 0,
 ): FrameEvents {
   const events: FrameEvents = {};
   state.frame += 1;
@@ -72,16 +87,22 @@ export function update(
     return events;
   }
 
+  const playerSpeed = isMobile ? PLAYER_SPEED_MOBILE : PLAYER_SPEED;
+  const pipeWidth = isMobile ? PIPE_WIDTH_MOBILE : PIPE_WIDTH;
+  const heightScale = isMobile ? PIPE_HEIGHT_SCALE_MOBILE : 1;
+  const cameraFollowRatio = isMobile ? CAMERA_FOLLOW_RATIO_MOBILE : CAMERA_FOLLOW_RATIO;
+
   // --- Horizontal movement ---
   let moveDelta = 0;
   if (keys.left) {
-    moveDelta -= PLAYER_SPEED;
+    moveDelta -= playerSpeed;
     state.facing = -1;
   }
   if (keys.right) {
-    moveDelta += PLAYER_SPEED;
+    moveDelta += playerSpeed;
     state.facing = 1;
   }
+  state.moving = moveDelta !== 0;
 
   const worldX = state.camX + state.px;
   let newWorldX = clamp(worldX + moveDelta, 0, WORLD_WIDTH - PLAYER_WIDTH);
@@ -90,9 +111,10 @@ export function update(
     for (const pipe of world.pipes) {
       // Solid wall only blocks if the player's body would intersect it
       // (i.e. the player is below the pipe's top surface).
-      if (state.py >= pipe.height) continue;
+      const pipeHeight = pipe.height * heightScale;
+      if (state.py >= pipeHeight) continue;
       const pipeLeft = pipe.x;
-      const pipeRight = pipe.x + PIPE_WIDTH;
+      const pipeRight = pipe.x + pipeWidth;
 
       if (
         moveDelta > 0 &&
@@ -114,8 +136,8 @@ export function update(
   // --- Camera follow ---
   let camCandidate = state.camX;
   const screenX = newWorldX - state.camX;
-  if (screenX > canvas.width * CAMERA_FOLLOW_RATIO) {
-    camCandidate = newWorldX - canvas.width * CAMERA_FOLLOW_RATIO;
+  if (screenX > canvas.width * cameraFollowRatio) {
+    camCandidate = newWorldX - canvas.width * cameraFollowRatio;
   }
   state.camX = clamp(camCandidate, 0, WORLD_WIDTH - canvas.width);
   state.px = clamp(newWorldX - state.camX, 0, canvas.width - PLAYER_WIDTH);
@@ -136,10 +158,11 @@ export function update(
     // Pipe tops
     for (const pipe of world.pipes) {
       const pipeLeft = pipe.x;
-      const pipeRight = pipe.x + PIPE_WIDTH;
+      const pipeRight = pipe.x + pipeWidth;
+      const pipeHeight = pipe.height * heightScale;
       if (playerCenterX < pipeLeft || playerCenterX > pipeRight) continue;
-      if (state.py <= pipe.height && state.py + state.vy >= pipe.height - 6) {
-        state.py = pipe.height;
+      if (state.py <= pipeHeight && state.py + state.vy >= pipeHeight - 6) {
+        state.py = pipeHeight;
         state.vy = 0;
         state.onGround = true;
       }
@@ -183,7 +206,7 @@ export function update(
   // --- Checkpoints / collectibles ---
   for (const pipe of world.pipes) {
     if (state.collected.has(pipe.id)) continue;
-    if (playerCenterX >= pipe.x + PIPE_WIDTH / 2) {
+    if (playerCenterX >= pipe.x + pipeWidth / 2) {
       state.collected.add(pipe.id);
       state.cpX = state.px;
       state.cpCam = state.camX;
@@ -196,7 +219,7 @@ export function update(
   let nearest = null;
   let nearestDist = 50;
   for (const pipe of world.pipes) {
-    const dist = Math.abs(playerCenterX - (pipe.x + PIPE_WIDTH / 2));
+    const dist = Math.abs(playerCenterX - (pipe.x + pipeWidth / 2));
     if (dist < nearestDist) {
       nearestDist = dist;
       nearest = pipe;
@@ -211,15 +234,24 @@ export function update(
   }
 
   // --- Particles ---
+  const lowPerf = frameTime > FRAME_TIME_THRESHOLD_MS;
+  const particlesPerFrame = lowPerf
+    ? 0
+    : isMobile
+      ? PARTICLES_PER_FRAME_MOBILE
+      : PARTICLES_PER_FRAME_DESKTOP;
+  const particleLife = isMobile ? PARTICLE_LIFE_MOBILE : PARTICLE_LIFE_DESKTOP;
+  const particleMax = isMobile ? PARTICLE_MAX_MOBILE : PARTICLE_MAX_DESKTOP;
+
   if (moveDelta !== 0 && state.onGround) {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < particlesPerFrame; i++) {
       state.particles.push({
         x: playerWorldX + (state.facing > 0 ? 0 : PLAYER_WIDTH),
         y: state.py + 2,
         vx: -state.facing * 0.6 + (Math.random() - 0.5) * 0.4,
         vy: 0.4 + Math.random() * 0.6,
-        life: 30,
-        maxLife: 30,
+        life: particleLife,
+        maxLife: particleLife,
         size: Math.random() < 0.5 ? 1 : 1.5,
       });
     }
@@ -232,25 +264,167 @@ export function update(
   }
   state.particles = state.particles
     .filter((p) => p.life > 0)
-    .slice(-100);
+    .slice(-particleMax);
 
   return events;
 }
 
-const STAR_FIELD = Array.from({ length: 50 }, (_, i) => ({
-  x: (i * 97) % WORLD_WIDTH,
-  y: 20 + ((i * 53) % 140),
-  size: i % 2 === 0 ? 1 : 1.5,
-  color: i % 2 === 0 ? "#1e293b" : "#334155",
-}));
+const makeStarField = (count: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    x: (i * 97) % WORLD_WIDTH,
+    y: 20 + ((i * 53) % 140),
+    size: i % 2 === 0 ? 1 : 1.5,
+    color: i % 2 === 0 ? "#1e293b" : "#334155",
+  }));
+
+const STAR_FIELD_DESKTOP = makeStarField(STAR_COUNT_DESKTOP);
+const STAR_FIELD_MOBILE = makeStarField(STAR_COUNT_MOBILE);
+
+// --- Hero palette (matches terminal-green / blueprint-slate theme) ---
+const HERO = {
+  skin: "#e8b08a",
+  skinShade: "#cf9168",
+  hair: "#13243a",
+  hairHi: "#1d3550",
+  hoodie: "#2a3a52",
+  hoodieDk: "#1d2a3c",
+  hoodieHi: "#38506c",
+  accent: "#4ade80",
+  accentDk: "#2f9e63",
+  pants: "#3a4a60",
+  pantsDk: "#2c3a4d",
+  white: "#ffffff",
+  pupil: "#0a0e17",
+} as const;
+
+/**
+ * Draws a detailed pixel-art "developer hero": hoodie with terminal-green
+ * accents, a headphone, and a full idle / walk / jump animation set.
+ * Rendered around a small physics hitbox (PLAYER_WIDTH) but visually larger.
+ */
+function drawHero(
+  ctx: CanvasRenderingContext2D,
+  cxRaw: number,
+  feetYRaw: number,
+  groundY: number,
+  state: GameState,
+) {
+  const facing = state.facing;
+  const airborne = !state.onGround;
+  const moving = state.moving && !airborne;
+  const f = state.frame;
+
+  const cx = Math.round(cxRaw);
+  const feetY = Math.round(feetYRaw);
+
+  // Ground shadow — stays on the ground, shrinks as the hero rises.
+  const heightAbove = Math.max(0, groundY - feetY);
+  const shadowScale = Math.max(0.45, 1 - heightAbove / 130);
+  ctx.fillStyle = `rgba(0,0,0,${0.28 * shadowScale})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, groundY - 1, 8.5 * shadowScale, 2.6 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Walk swing + idle breathing.
+  const sw = moving ? Math.sin(f * 0.33) : 0;
+  const swing = Math.round(sw * 2);
+  const ub = moving || airborne ? 0 : Math.round(Math.sin(f * 0.1)); // upper-body bob
+
+  ctx.save();
+  ctx.translate(cx, feetY);
+  if (facing < 0) ctx.scale(-1, 1);
+
+  const r = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+
+  // --- Legs ---
+  if (airborne) {
+    // Tucked: front knee up, back leg trailing.
+    r(-3, -13, 3, 6, HERO.pantsDk);
+    r(-4, -7, 4, 3, HERO.accentDk);
+    r(1, -13, 3, 5, HERO.pants);
+    r(1, -8, 4, 3, HERO.accent);
+  } else {
+    const backLegX = -3 - swing;
+    const frontLegX = swing;
+    r(backLegX, -13, 3, 10, HERO.pantsDk);
+    r(backLegX - 1, -3, 4, 3, HERO.accentDk);
+    r(frontLegX, -13, 3, 10, HERO.pants);
+    r(frontLegX - 1, -3, 4, 3, HERO.accent);
+  }
+
+  // --- Back arm (behind torso) ---
+  if (airborne) {
+    r(-6, -30, 3, 7, HERO.hoodieDk);
+    r(-6, -31, 3, 2, HERO.skinShade);
+  } else {
+    const ax = -6 + swing;
+    r(ax, -26 + ub, 3, 9, HERO.hoodieDk);
+    r(ax, -18 + ub, 3, 1, HERO.accentDk);
+    r(ax, -17 + ub, 3, 2, HERO.skinShade);
+  }
+
+  // --- Torso (hoodie) ---
+  r(-6, -27 + ub, 12, 14, HERO.hoodie);
+  r(-6, -27 + ub, 2, 14, HERO.hoodieHi); // left highlight
+  r(4, -27 + ub, 2, 14, HERO.hoodieDk); // right shadow
+  r(-4, -18 + ub, 8, 1, HERO.hoodieDk); // pocket seam
+  r(-6, -14 + ub, 12, 1, HERO.accentDk); // hem
+  r(0, -26 + ub, 1, 12, HERO.accent); // zip
+  // Hood-down collar + green lining
+  r(-5, -30 + ub, 10, 4, HERO.hoodieDk);
+  r(-3, -29 + ub, 6, 1, HERO.accentDk);
+  // Drawstrings
+  r(-1, -29 + ub, 1, 4, HERO.accent);
+  r(2, -29 + ub, 1, 4, HERO.accent);
+
+  // --- Head ---
+  r(-4, -36 + ub, 8, 9, HERO.skin);
+  r(-4, -34 + ub, 2, 7, HERO.skinShade); // back-of-jaw shade
+  r(-4, -32 + ub, 1, 2, HERO.skinShade); // ear
+  // Hair
+  r(-4, -37 + ub, 8, 3, HERO.hair); // cap
+  r(-4, -37 + ub, 2, 8, HERO.hair); // back
+  r(-4, -37 + ub, 1, 4, HERO.hairHi); // strand highlight
+  r(2, -35 + ub, 2, 2, HERO.hair); // front fringe
+  // Face
+  r(1, -34 + ub, 2, 1, HERO.hair); // eyebrow
+  r(1, -33 + ub, 2, 2, HERO.white); // eye white
+  r(2, -33 + ub, 1, 2, HERO.pupil); // pupil
+  r(1, -30 + ub, 2, 1, HERO.skinShade); // mouth
+  // Headphone (developer nod, themed green)
+  r(-4, -38 + ub, 8, 1, HERO.hoodieDk); // band
+  r(3, -33 + ub, 2, 3, HERO.accentDk); // ear cup
+  r(3, -33 + ub, 2, 1, HERO.accent); // cup highlight
+
+  // --- Front arm (over torso) ---
+  if (airborne) {
+    r(4, -30, 3, 7, HERO.hoodie);
+    r(4, -31, 3, 2, HERO.skin);
+  } else {
+    const ax = 3 - swing;
+    r(ax, -26 + ub, 3, 9, HERO.hoodie);
+    r(ax, -18 + ub, 3, 1, HERO.accent);
+    r(ax, -17 + ub, 3, 2, HERO.skin);
+  }
+
+  ctx.restore();
+}
 
 export function draw(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   world: WorldData,
   canvas: { width: number; height: number },
+  isMobile = false,
 ) {
   const { width, height } = canvas;
+  const pipeWidth = isMobile ? PIPE_WIDTH_MOBILE : PIPE_WIDTH;
+  const heightScale = isMobile ? PIPE_HEIGHT_SCALE_MOBILE : 1;
+  const pipeBody = pipeWidth - (PIPE_WIDTH - PIPE_BODY);
+  const starField = isMobile ? STAR_FIELD_MOBILE : STAR_FIELD_DESKTOP;
   const groundY = height - GROUND_OFFSET;
   const camX = state.camX;
   const toScreenY = (h: number) => groundY - h;
@@ -267,7 +441,7 @@ export function draw(
   }
 
   // 1. Stars (parallax)
-  for (const star of STAR_FIELD) {
+  for (const star of starField) {
     const sx = star.x - camX * 0.2;
     if (sx < -10 || sx > width + 10) continue;
     ctx.fillStyle = star.color;
@@ -313,49 +487,54 @@ export function draw(
   // 4. Pipes
   for (const pipe of world.pipes) {
     const sx = pipe.x - camX;
-    if (sx + PIPE_WIDTH < 0 || sx > width) continue;
+    if (sx + pipeWidth < 0 || sx > width) continue;
 
-    const bodyHeight = Math.max(pipe.height - PIPE_LIP_HEIGHT, 0);
-    const bodyX = sx + (PIPE_WIDTH - PIPE_BODY) / 2;
+    const pipeHeight = pipe.height * heightScale;
+    const bodyHeight = Math.max(pipeHeight - PIPE_LIP_HEIGHT, 0);
+    const bodyX = sx + (pipeWidth - pipeBody) / 2;
     const bodyY = toScreenY(bodyHeight);
-    const lipY = toScreenY(pipe.height);
+    const lipY = toScreenY(pipeHeight);
     const color = pipeColors.get(pipe.id) ?? "#4ade80";
 
     // Body
     ctx.fillStyle = `${color}33`;
     ctx.strokeStyle = `${color}80`;
     ctx.lineWidth = 0.5;
-    ctx.fillRect(bodyX, bodyY, PIPE_BODY, groundY - bodyY);
-    ctx.strokeRect(bodyX, bodyY, PIPE_BODY, groundY - bodyY);
+    ctx.fillRect(bodyX, bodyY, pipeBody, groundY - bodyY);
+    ctx.strokeRect(bodyX, bodyY, pipeBody, groundY - bodyY);
 
     // Lip
     ctx.fillStyle = `${color}4d`;
     ctx.strokeStyle = `${color}80`;
-    ctx.fillRect(sx, lipY, PIPE_WIDTH, PIPE_LIP_HEIGHT);
-    ctx.strokeRect(sx, lipY, PIPE_WIDTH, PIPE_LIP_HEIGHT);
+    ctx.fillRect(sx, lipY, pipeWidth, PIPE_LIP_HEIGHT);
+    ctx.strokeRect(sx, lipY, pipeWidth, PIPE_LIP_HEIGHT);
 
     // Inner highlight / shadow
     ctx.fillStyle = "rgba(255,255,255,0.1)";
     ctx.fillRect(bodyX, bodyY, 4, groundY - bodyY);
     ctx.fillStyle = "rgba(0,0,0,0.06)";
-    ctx.fillRect(bodyX + PIPE_BODY - 4, bodyY, 4, groundY - bodyY);
+    ctx.fillRect(bodyX + pipeBody - 4, bodyY, 4, groundY - bodyY);
 
-    // Label
-    ctx.fillStyle = color;
-    ctx.font = `9px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText(pipe.label, sx + PIPE_WIDTH / 2, lipY - 16);
+    // Label (hidden on mobile — info panel shows the name when nearby)
+    if (!isMobile) {
+      ctx.fillStyle = color;
+      ctx.font = `9px "JetBrains Mono", monospace`;
+      ctx.textAlign = "center";
+      ctx.fillText(pipe.label, sx + pipeWidth / 2, lipY - 16);
+    }
 
     // Star / checkmark
     if (state.collected.has(pipe.id)) {
       ctx.fillStyle = "#4ade80";
       ctx.font = `12px "JetBrains Mono", monospace`;
-      ctx.fillText("✓", sx + PIPE_WIDTH / 2, lipY - 4);
+      ctx.textAlign = "center";
+      ctx.fillText("✓", sx + pipeWidth / 2, lipY - 4);
     } else {
       const bob = Math.sin(state.frame * 0.08 + pipe.x) * 3;
       ctx.fillStyle = "#fbbf24";
       ctx.font = `12px "JetBrains Mono", monospace`;
-      ctx.fillText("★", sx + PIPE_WIDTH / 2, lipY - 4 + bob);
+      ctx.textAlign = "center";
+      ctx.fillText("★", sx + pipeWidth / 2, lipY - 4 + bob);
     }
     ctx.textAlign = "left";
   }
@@ -404,57 +583,9 @@ export function draw(
     ctx.fill();
   }
 
-  // 7. Player (8-bit pixel art)
+  // 7. Player (detailed pixel-art developer hero)
   if (!state.ended) {
-    const px = state.px;
-    const groundScreenY = groundY;
-    const feetY = toScreenY(state.py);
-    const airborne = !state.onGround;
-
-    // Shadow
-    if (airborne) {
-      ctx.fillStyle = "rgba(74,222,128,0.15)";
-      ctx.fillRect(px - 2, groundScreenY - 2, PLAYER_WIDTH + 4, 2);
-    }
-
-    const bodyY = feetY - PLAYER_HEIGHT;
-    const headY = bodyY;
-    const headH = 8;
-    const torsoY = headY + headH;
-    const torsoH = PLAYER_HEIGHT - headH - 5;
-    const legY = torsoY + torsoH;
-    const legH = 5;
-
-    // Head
-    ctx.fillStyle = "#4ade80";
-    ctx.fillRect(px + (PLAYER_WIDTH - 6) / 2, headY, 6, headH);
-    // Head highlight
-    ctx.fillStyle = "#86efac";
-    ctx.fillRect(px + (PLAYER_WIDTH - 6) / 2 + 1, headY + 1, 2, 3);
-
-    // Eyes
-    ctx.fillStyle = "#ffffff";
-    const eyeX = state.facing > 0 ? px + (PLAYER_WIDTH - 6) / 2 + 3 : px + (PLAYER_WIDTH - 6) / 2 + 1;
-    ctx.fillRect(eyeX, headY + 2, 2, 2);
-
-    // Torso
-    ctx.fillStyle = "#4ade80";
-    ctx.fillRect(px + (PLAYER_WIDTH - 8) / 2, torsoY, 8, torsoH);
-
-    // Legs
-    if (airborne) {
-      ctx.fillRect(px, legY, 3, legH);
-      ctx.fillRect(px + PLAYER_WIDTH - 3, legY, 3, legH);
-    } else {
-      const walking = (state.frame % 10) < 5;
-      if (walking) {
-        ctx.fillRect(px, legY, 3, legH);
-        ctx.fillRect(px + PLAYER_WIDTH - 3, legY, 3, legH - 2);
-      } else {
-        ctx.fillRect(px, legY, 3, legH - 2);
-        ctx.fillRect(px + PLAYER_WIDTH - 3, legY, 3, legH);
-      }
-    }
+    drawHero(ctx, state.px + PLAYER_WIDTH / 2, toScreenY(state.py), groundY, state);
   }
 
   // 8. End flag

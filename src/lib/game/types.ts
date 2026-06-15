@@ -61,6 +61,7 @@ export type GameState = {
   frame: number;
   lastZone: string;
   particles: Particle[];
+  moving: boolean;
 };
 
 export type FrameEvents = {
