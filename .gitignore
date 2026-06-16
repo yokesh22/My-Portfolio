@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# aws cli / docker installer artifacts (don't commit these)
+/aws/
+/awscliv2.zip
+get-docker.sh
