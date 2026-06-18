@@ -32,6 +32,20 @@
 - [x] Track A (Hero / Landing) complete
 - [ ] ...remaining tasks populated from phase files
 
+## Contact form flow (Phase 1 Track C — LOCAL DONE 2026-06-17)
+- [x] 3A Contact form UI — already existed; wired to real API (FormData → fetch POST /api/contact, added "error" state + error banner)
+- [x] 3B API route + SQS + consumer + DynamoDB — VERIFIED end-to-end locally via LocalStack
+  - `docker-compose.yml` (root): localstack (sqs+dynamodb, region ap-south-1) + postgres:16 (for blog later)
+  - `scripts/localstack-init.sh`: auto-creates queue `portfolio-contact-queue` + table `portfolio-contacts` on container ready
+  - `.env.local` (gitignored): AWS_ENDPOINT_URL=http://localhost:4566 is the local/prod switch (unset in prod → real AWS)
+  - `src/lib/aws.ts`: shared lazy-singleton SQS + DynamoDB clients (used by route + consumer)
+  - `src/app/api/contact/route.ts`: validates name/email/message → SendMessage to SQS → returns {ok:true}
+  - `scripts/sqs-consumer.ts`: long-polls SQS → PutItem to DynamoDB → DeleteMessage. Run: `npx tsx scripts/sqs-consumer.ts`
+  - `ContactMessage` type added to src/types/index.ts
+  - Verified: curl POST → consumer log shows stored+deleted → `awslocal dynamodb scan` shows the item. `npm run build` clean.
+- Local dev workflow: `docker compose up -d` → `npx tsx scripts/sqs-consumer.ts` (separate terminal) → `npm run dev`. Stop infra: `docker compose down` (add `-v` to wipe data).
+- [ ] Phase 2.5 — REAL AWS (next): create SQS queue + DynamoDB table in ap-south-1; add sqs:Send/Receive/Delete + dynamodb:PutItem/Scan to portfolio-ec2-role; set env on EC2 (no AWS_ENDPOINT_URL); rebuild image → ECR → redeploy; run consumer on server; test on live ALB URL.
+
 ## Blockers
 (none currently)
 

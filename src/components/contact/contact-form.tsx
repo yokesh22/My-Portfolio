@@ -6,18 +6,33 @@ import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 
-type Status = "idle" | "submitting" | "sent";
+type Status = "idle" | "submitting" | "sent" | "error";
 
-// UI only for now — the SQS-backed POST /api/contact is wired in a later pass.
 export function ContactForm() {
   const [status, setStatus] = useState<Status>("idle");
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus("submitting");
-    // Simulated latency until the API route exists.
-    await new Promise((r) => setTimeout(r, 800));
-    setStatus("sent");
+
+    const data = new FormData(e.currentTarget);
+    const payload = {
+      name: data.get("name"),
+      email: data.get("email"),
+      message: data.get("message"),
+    };
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (status === "sent") {
@@ -53,6 +68,15 @@ export function ContactForm() {
         <label className="font-mono text-xs text-content-muted">message</label>
         <Textarea name="message" rows={5} placeholder="What's up?" required />
       </div>
+      {status === "error" && (
+        <motion.p
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="font-mono text-xs text-red-400"
+        >
+          &gt; something went wrong. please try again.
+        </motion.p>
+      )}
       <Button type="submit" disabled={status === "submitting"} className="self-start">
         {status === "submitting" ? "sending…" : "send message"}
         <Send size={14} />

@@ -25,3 +25,13 @@ export interface NavLink {
   command: string;
   href: string;
 }
+
+// A contact form submission — produced by the form, queued via SQS,
+// stored in DynamoDB by the consumer.
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  receivedAt: string;
+}
