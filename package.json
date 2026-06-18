@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:consumer": "esbuild scripts/sqs-consumer.ts --bundle --platform=node --target=node22 --outfile=consumer.js",
     "start": "next start",
     "lint": "eslint"
   },
@@ -29,6 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",
+    "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",

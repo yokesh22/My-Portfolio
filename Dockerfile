@@ -17,6 +17,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
+# Bundle the SQS consumer into a single self-contained consumer.js (incl. AWS SDK)
+# so the runner image can launch it as a separate "worker" container — no tsx,
+# no extra node_modules needed at runtime.
+RUN npm run build:consumer
 
 # ---------- Stage 3: runner — the lean final image ----------
 FROM node:22-alpine AS runner
@@ -31,6 +35,8 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The bundled worker — run as a second container via:  docker run ... node consumer.js
+COPY --from=builder --chown=nextjs:nodejs /app/consumer.js ./consumer.js
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000

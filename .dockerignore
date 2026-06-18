@@ -8,3 +8,5 @@ Dockerfile
 .dockerignore
 .env*.local
 .claude
+# built fresh inside the image (builder stage) — never copy a local copy in
+consumer.js

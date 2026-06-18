@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# bundled consumer (built by `npm run build:consumer`, baked into the image)
+/consumer.js
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
