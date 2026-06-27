@@ -47,3 +47,5 @@ next-env.d.ts
 /aws/
 /awscliv2.zip
 get-docker.sh
+
+/src/generated/prisma
